@@ -19,6 +19,7 @@ function App() {
   const [category, setCategory] = useState("food");
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const categories = ["food", "housing", "utilities", "transport", "entertainment", "salary", "other"];
 
@@ -39,6 +40,11 @@ function App() {
   if (filterCategory !== "all") {
     filteredTransactions = filteredTransactions.filter(t => t.category === filterCategory);
   }
+
+  const handleDeleteConfirm = () => {
+    setTransactions(transactions.filter(t => t.id !== pendingDeleteId));
+    setPendingDeleteId(null);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -62,6 +68,7 @@ function App() {
 
 
   return (
+    <>
     <div className="app">
       <h1>Finance Tracker</h1>
       <p className="subtitle">Track your income and expenses</p>
@@ -132,7 +139,7 @@ function App() {
               <th>Description</th>
               <th>Category</th>
               <th>Amount</th>
-
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -144,13 +151,28 @@ function App() {
                 <td className={t.type === "income" ? "income-amount" : "expense-amount"}>
                   {t.type === "income" ? "+" : "-"}${t.amount}
                 </td>
-
+                <td>
+                  <button className="delete-btn" onClick={() => setPendingDeleteId(t.id)}>Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+
+    {pendingDeleteId !== null && (
+      <div className="modal-overlay">
+        <div className="modal">
+          <p>Delete this transaction?</p>
+          <div className="modal-actions">
+            <button className="modal-confirm" onClick={handleDeleteConfirm}>Confirm</button>
+            <button className="modal-cancel" onClick={() => setPendingDeleteId(null)}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
