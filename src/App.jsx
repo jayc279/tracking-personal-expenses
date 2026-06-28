@@ -20,6 +20,8 @@ function App() {
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [pendingUpdate, setPendingUpdate] = useState(null); // { id, amount }
+  const [updateAmount, setUpdateAmount] = useState("");
 
   const categories = ["food", "housing", "utilities", "transport", "entertainment", "salary", "other"];
 
@@ -44,6 +46,19 @@ function App() {
   const handleDeleteConfirm = () => {
     setTransactions(transactions.filter(t => t.id !== pendingDeleteId));
     setPendingDeleteId(null);
+  };
+
+  const openUpdate = (t) => {
+    setPendingUpdate(t);
+    setUpdateAmount(t.amount);
+  };
+
+  const handleUpdateConfirm = () => {
+    if (!updateAmount || isNaN(parseFloat(updateAmount))) return;
+    setTransactions(transactions.map(t =>
+      t.id === pendingUpdate.id ? { ...t, amount: updateAmount } : t
+    ));
+    setPendingUpdate(null);
   };
 
   const handleSubmit = (e) => {
@@ -151,7 +166,8 @@ function App() {
                 <td className={t.type === "income" ? "income-amount" : "expense-amount"}>
                   {t.type === "income" ? "+" : "-"}${t.amount}
                 </td>
-                <td>
+                <td className="row-actions">
+                  <button className="update-btn" onClick={() => openUpdate(t)}>Update</button>
                   <button className="delete-btn" onClick={() => setPendingDeleteId(t.id)}>Delete</button>
                 </td>
               </tr>
@@ -160,6 +176,25 @@ function App() {
         </table>
       </div>
     </div>
+
+    {pendingUpdate !== null && (
+      <div className="modal-overlay">
+        <div className="modal">
+          <p>Update amount for <strong>{pendingUpdate.description}</strong></p>
+          <input
+            className="modal-input"
+            type="number"
+            value={updateAmount}
+            onChange={(e) => setUpdateAmount(e.target.value)}
+            autoFocus
+          />
+          <div className="modal-actions">
+            <button className="modal-confirm" onClick={handleUpdateConfirm}>Confirm</button>
+            <button className="modal-cancel" onClick={() => setPendingUpdate(null)}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {pendingDeleteId !== null && (
       <div className="modal-overlay">
