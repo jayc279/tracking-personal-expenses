@@ -1,0 +1,61 @@
+---
+description: Finance Tracker — project rules and architecture reference
+globs:
+  - "src/**/*.jsx"
+  - "src/**/*.js"
+  - "src/**/*.css"
+alwaysApply: true
+---
+
+## Package Managers
+
+- JS dependencies: `npm` (`npm install`, `npm run dev`, `npm test`)
+- Python dependencies: `uv` (`uv sync`, `uv add <pkg>`, `uv run <script>`)
+- Never mix: do not use `pip` or `yarn`
+
+## Component Architecture
+
+`App.jsx` owns all shared state and handlers. Rendering is delegated to four components:
+
+```
+App
+├── Summary            props: totalIncome, totalExpenses, balance
+├── AddTransaction     props: categories, onSubmit(newTransaction)
+│                      owns its own local form state; resets after submit
+├── Transactions       props: transactions (pre-filtered), filterType, filterCategory,
+│                             categories, onFilterTypeChange, onFilterCategoryChange,
+│                             onUpdate(transaction), onDelete(id)
+├── ModalActions       props: visible, message, onConfirm, onCancel, children
+│   └── <input>        modal-input passed as children from App — Update flow only
+└── ModalActions       same shell, no children — Delete flow
+```
+
+Component files live in `src/components/`. Do not add state to `Summary` or `Transactions` — they are stateless.
+
+## State Ownership
+
+**`App.jsx` (shared):** `transactions`, `filterType`, `filterCategory`, `pendingDeleteId`, `pendingUpdate`, `updateAmount`
+
+**`AddTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category`
+
+## Data Rules
+
+- `amount` is stored as a **string** on every transaction object
+- Always use `parseFloat(t.amount)` for arithmetic — never coerce with `+` or `Number()`
+- `totalIncome`, `totalExpenses`, and `balance` are derived on every render in `App.jsx`; never store them in state
+
+## Testing Rules
+
+- Runner: Vitest 4 + jsdom; setup file `src/setupTests.js` imports `@testing-library/jest-dom`
+- Always use `userEvent.setup()` — do not call `userEvent` methods directly (legacy API)
+- Scope queries with `within(element)` to avoid cross-section matches
+  - **Critical gotcha**: `screen.getByText('Income')` is ambiguous — it matches the summary card `<h3>` AND `<option value="income">` elements in both selects. Always use `within(document.querySelector('.summary'))` first
+- `beforeEach` renders a fresh `<App>` — no shared state between tests
+- Seed data: 8 transactions; `[0]` = Salary (income, $5000), `[1]` = Rent (expense, $1200)
+  - Target `deleteButtons[1]` / `updateButtons[1]` when testing expense mutations
+
+## Constraints
+
+- No router, no React context, no external state library
+- No data persistence — state resets on page refresh by design
+- No backend; all logic is client-side

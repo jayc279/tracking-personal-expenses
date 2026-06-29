@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+dist/
+coverage/
+.git/
+package-lock.json
+uv.lock
+*.pyc
+__pycache__/
