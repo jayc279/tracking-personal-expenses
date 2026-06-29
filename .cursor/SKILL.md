@@ -1,14 +1,27 @@
 # Finance Tracker — Cursor Skill
 
-> description: Launch, test, and navigate the Finance Tracker React app
+> description: Launch, test, and navigate the Finance Tracker React + FastAPI app
 
 ## Launch
 
+Both servers must run concurrently in separate terminals:
+
 ```bash
+# Terminal 1 — Backend (FastAPI + SQLite)
+uv run uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — Frontend (Vite dev server)
 npm run dev
 ```
 
-Dev server starts at **http://localhost:5173** (Vite 6). Hot-reload is enabled — source changes apply without restart.
+Frontend at **http://localhost:5173** (Vite 6, hot-reload). API at **http://localhost:8000** (uvicorn, auto-reload). Vite proxies all `/api/*` requests to `:8000` — no CORS configuration needed.
+
+### Production (single server)
+
+```bash
+npm run build                                    # output → dist/
+uv run uvicorn backend.main:app --port 8000      # serves dist/ under /static/; Jinja2 serves /
+```
 
 ## Test
 
@@ -34,16 +47,30 @@ npm run build     # production bundle → dist/
 
 ## Key Entry Points
 
+### Backend
+
 | File | Role |
 |------|------|
-| `src/App.jsx` | Root — all shared state, derived values, handlers, localStorage sync |
+| `backend/main.py` | FastAPI app — lifespan `init_db`, Jinja2 `GET /`, `/static` mount |
+| `backend/database.py` | sqlite3 CRUD — `init_db`, `get_all`, `create`, `update`, `delete` |
+| `backend/models.py` | Pydantic models: `TransactionIn`, `TransactionOut` |
+| `backend/routers/transactions.py` | REST routes: GET / POST / PUT `/{id}` / DELETE `/{id}` |
+| `backend/templates/index.html` | Jinja2 HTML shell — mounts React `#root` (production) |
+| `finance.db` | SQLite database file — created on first server start |
+
+### Frontend
+
+| File | Role |
+|------|------|
+| `src/api.js` | Fetch wrappers — sole reference to `/api/transactions` |
+| `src/App.jsx` | Root — shared state, async handlers, derived values |
 | `src/components/Summary.jsx` | Summary cards (income, expenses, balance) |
 | `src/components/AddTransaction.jsx` | Add form with local state |
 | `src/components/Transactions.jsx` | Filters + transaction table |
 | `src/components/UpdateTransaction.jsx` | Update modal — local form state for all 4 fields |
-| `src/components/ModalActions.jsx` | Shared modal shell (Delete flow; also composed inside UpdateTransaction) |
+| `src/components/ModalActions.jsx` | Shared modal shell (Delete flow; composed inside UpdateTransaction) |
 | `src/App.css` | All styles — summary cards, table, modals, layout |
-| `vite.config.js` | Vite + Vitest config (jsdom environment) |
+| `vite.config.js` | Vite + Vitest config — jsdom env + `/api` proxy to `:8000` |
 
 ## CSS Selector Map
 
@@ -63,9 +90,20 @@ npm run build     # production bundle → dist/
 | `.update-btn` | Per-row Update button |
 | `.delete-btn` | Per-row Delete button |
 
+## API Quick Reference
+
+```
+GET    /api/transactions             list all; optional ?type= ?category= filters
+POST   /api/transactions             create; body: TransactionIn; returns TransactionOut (201)
+PUT    /api/transactions/{id}        update all fields; returns TransactionOut
+DELETE /api/transactions/{id}        delete; returns 204
+GET    /                             Jinja2-rendered HTML shell (production)
+GET    /static/**                    Vite dist/ output (production)
+```
+
 ## Seed Data
 
-8 transactions loaded on mount from `localStorage` (key: `finance-tracker-transactions`); seed data used only when storage is empty. Changes persist across page refreshes.
+8 transactions inserted into SQLite on first server start (`init_db` runs on lifespan). If `finance.db` already exists the seed is skipped. Delete `finance.db` to reset to seed data.
 
 | # | Description | Type | Amount | Category |
 |---|-------------|------|--------|----------|

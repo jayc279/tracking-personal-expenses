@@ -4,6 +4,7 @@ globs:
   - "src/**/*.jsx"
   - "src/**/*.js"
   - "src/**/*.css"
+  - "backend/**/*.py"
 alwaysApply: true
 ---
 
@@ -12,6 +13,31 @@ alwaysApply: true
 - JS dependencies: `npm` (`npm install`, `npm run dev`, `npm test`)
 - Python dependencies: `uv` (`uv sync`, `uv add <pkg>`, `uv run <script>`)
 - Never mix: do not use `pip` or `yarn`
+
+## Backend Architecture
+
+FastAPI + SQLite + Jinja2 (HTML shell only).
+
+```
+backend/
+  main.py              FastAPI app — lifespan init_db, Jinja2 GET /, /static mount
+  database.py          sqlite3 CRUD: init_db, get_all, create, update, delete
+  models.py            Pydantic: TransactionIn, TransactionOut
+  routers/
+    transactions.py    /api/transactions — GET, POST, PUT/{id}, DELETE/{id}
+  templates/
+    index.html         Jinja2 shell — mounts React #root (production only)
+```
+
+API endpoints:
+- `GET  /api/transactions[?type=&category=]` → `list[TransactionOut]`
+- `POST /api/transactions` → `TransactionOut` (201)
+- `PUT  /api/transactions/{id}` → `TransactionOut`
+- `DELETE /api/transactions/{id}` → 204
+
+`amount` is stored as `TEXT` in SQLite — do not cast to float in the DB layer.
+
+Run dev stack: `uv run uvicorn backend.main:app --reload --port 8000` + `npm run dev` (Vite proxies `/api/*` to `:8000`).
 
 ## Component Architecture
 
@@ -40,11 +66,26 @@ Component files live in `src/components/`. Do not add state to `Summary` or `Tra
 ## State Ownership
 
 **`App.jsx` (shared):** `transactions`, `filterType`, `filterCategory`, `pendingDeleteId`, `pendingUpdate`
-- `transactions` is initialised from `localStorage` (key: `finance-tracker-transactions`) via lazy `useState`; falls back to `SEED_TRANSACTIONS` when storage is empty; synced back via `useEffect([transactions])`
+- `transactions` is loaded from `GET /api/transactions` on mount via `useEffect([], getTransactions)`
+- All CRUD handlers (`handleAdd`, `handleUpdateConfirm`, `handleDeleteConfirm`) are `async`; they call `src/api.js` then update local state optimistically
+- `filterType` / `filterCategory` filtering is applied client-side before passing to `<Transactions>`
 
 **`AddTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category` — resets to defaults after submit
 
 **`UpdateTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category` — synced from `transaction` prop via `useEffect([transaction])`; validates non-empty description + numeric amount before calling `onConfirm(updatedTransaction)`
+
+## Data Flow
+
+```
+React App.jsx
+  → src/api.js (fetch wrappers)
+    → GET/POST/PUT/DELETE /api/transactions
+      → FastAPI routers/transactions.py
+        → backend/database.py (sqlite3)
+          → finance.db
+```
+
+`src/api.js` is the only file that references the `/api/transactions` URL. Do not inline `fetch` calls in components.
 
 ## Data Rules
 
@@ -54,14 +95,21 @@ Component files live in `src/components/`. Do not add state to `Summary` or `Tra
 
 ## Testing Rules
 
-- Runner: Vitest 4 + jsdom; setup file `src/setupTests.js`:
-  - imports `@testing-library/jest-dom`
-  - installs an in-memory `localStorage` mock via `Object.defineProperty(globalThis, 'localStorage', ...)`
-  - clears the mock in `beforeEach` so each test starts from `SEED_TRANSACTIONS`
+- Runner: Vitest 4 + jsdom; setup file `src/setupTests.js` imports `@testing-library/jest-dom` only — no localStorage mock
+- API is mocked at the module level: `vi.mock('./api')` at the top of `App.test.jsx`
+- `beforeEach` configures mocks and renders:
+  ```js
+  getTransactions.mockResolvedValue([...SEED_TRANSACTIONS])
+  addTransaction.mockImplementation(t => Promise.resolve({ ...t, id: Date.now() }))
+  updateTransaction.mockImplementation(t => Promise.resolve(t))
+  deleteTransaction.mockResolvedValue(undefined)
+  await act(async () => { render(<App />) })
+  await waitFor(() => expect(getRowCount()).toBe(8))
+  ```
+- Async CRUD actions need `waitFor` on the expected DOM change — not just `await user.click`
 - Always use `userEvent.setup()` — do not call `userEvent` methods directly (legacy API)
 - Scope queries with `within(element)` to avoid cross-section matches
   - **Critical gotcha**: `screen.getByText('Income')` is ambiguous — matches the summary card `<h3>` AND `<option value="income">` elements. Always use `within(document.querySelector('.summary'))` first
-- `beforeEach` renders a fresh `<App>` — no shared state between tests
 - Seed data: 8 transactions; `[0]` = Salary (income, $5000), `[1]` = Rent (expense, $1200), `[2]` = Groceries (expense, $150)
   - Target `deleteButtons[1]` / `updateButtons[1]` for expense mutations; `updateButtons[2]` for Groceries (category tests)
 - Inside the Update modal:
@@ -71,6 +119,7 @@ Component files live in `src/components/`. Do not add state to `Summary` or `Tra
 
 ## Constraints
 
-- No router, no React context, no external state library
-- No server-side persistence — `localStorage` only; data is device-local
-- No backend; all logic is client-side
+- No router, no React context, no external state library on the frontend
+- No cloud/remote persistence — SQLite (`finance.db`) is local to the server process
+- Do not inline `fetch` calls in React components — all API calls go through `src/api.js`
+- Do not add ORM dependencies — use stdlib `sqlite3` directly in `backend/database.py`

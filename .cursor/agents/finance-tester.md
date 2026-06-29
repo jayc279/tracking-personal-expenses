@@ -46,6 +46,7 @@ Report each failure as a separate bullet. Do not run the tests a second time.
 ## Scope
 
 - Test file: `src/App.test.jsx` only
+- Tests mock the API layer via `vi.mock('./api')` — **no running backend required**
 - Do not run Python tests, linters, or build steps
 - Do not run `npm run test:watch` (non-terminating)
 
