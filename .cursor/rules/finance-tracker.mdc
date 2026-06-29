@@ -15,28 +15,36 @@ alwaysApply: true
 
 ## Component Architecture
 
-`App.jsx` owns all shared state and handlers. Rendering is delegated to four components:
+`App.jsx` owns all shared state and handlers. Rendering is delegated to five components:
 
 ```
 App
-├── Summary            props: totalIncome, totalExpenses, balance
-├── AddTransaction     props: categories, onSubmit(newTransaction)
-│                      owns its own local form state; resets after submit
-├── Transactions       props: transactions (pre-filtered), filterType, filterCategory,
-│                             categories, onFilterTypeChange, onFilterCategoryChange,
-│                             onUpdate(transaction), onDelete(id)
-├── ModalActions       props: visible, message, onConfirm, onCancel, children
-│   └── <input>        modal-input passed as children from App — Update flow only
-└── ModalActions       same shell, no children — Delete flow
+├── Summary               props: totalIncome, totalExpenses, balance
+├── AddTransaction        props: categories, onSubmit(newTransaction)
+│                         owns its own local form state; resets after submit
+├── Transactions          props: transactions (pre-filtered), filterType, filterCategory,
+│                                categories, onFilterTypeChange, onFilterCategoryChange,
+│                                onUpdate(transaction), onDelete(id)
+├── UpdateTransaction     props: transaction, categories, onConfirm(updatedTransaction), onCancel
+│   └── ModalActions      props: visible, message, onConfirm, onCancel, children
+│       └── .update-fields
+│           ├── <input type="text">    description
+│           ├── <input type="number">  amount
+│           ├── <select>               type (income | expense)
+│           └── <select>               category
+└── ModalActions          props: visible, message, onConfirm, onCancel   ← Delete flow only
 ```
 
-Component files live in `src/components/`. Do not add state to `Summary` or `Transactions` — they are stateless.
+Component files live in `src/components/`. Do not add state to `Summary` or `Transactions` — they are stateless. `UpdateTransaction` owns its own form state and syncs from props via `useEffect`.
 
 ## State Ownership
 
-**`App.jsx` (shared):** `transactions`, `filterType`, `filterCategory`, `pendingDeleteId`, `pendingUpdate`, `updateAmount`
+**`App.jsx` (shared):** `transactions`, `filterType`, `filterCategory`, `pendingDeleteId`, `pendingUpdate`
+- `transactions` is initialised from `localStorage` (key: `finance-tracker-transactions`) via lazy `useState`; falls back to `SEED_TRANSACTIONS` when storage is empty; synced back via `useEffect([transactions])`
 
-**`AddTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category`
+**`AddTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category` — resets to defaults after submit
+
+**`UpdateTransaction.jsx` (local form only):** `description`, `amount`, `type`, `category` — synced from `transaction` prop via `useEffect([transaction])`; validates non-empty description + numeric amount before calling `onConfirm(updatedTransaction)`
 
 ## Data Rules
 
@@ -46,16 +54,23 @@ Component files live in `src/components/`. Do not add state to `Summary` or `Tra
 
 ## Testing Rules
 
-- Runner: Vitest 4 + jsdom; setup file `src/setupTests.js` imports `@testing-library/jest-dom`
+- Runner: Vitest 4 + jsdom; setup file `src/setupTests.js`:
+  - imports `@testing-library/jest-dom`
+  - installs an in-memory `localStorage` mock via `Object.defineProperty(globalThis, 'localStorage', ...)`
+  - clears the mock in `beforeEach` so each test starts from `SEED_TRANSACTIONS`
 - Always use `userEvent.setup()` — do not call `userEvent` methods directly (legacy API)
 - Scope queries with `within(element)` to avoid cross-section matches
-  - **Critical gotcha**: `screen.getByText('Income')` is ambiguous — it matches the summary card `<h3>` AND `<option value="income">` elements in both selects. Always use `within(document.querySelector('.summary'))` first
+  - **Critical gotcha**: `screen.getByText('Income')` is ambiguous — matches the summary card `<h3>` AND `<option value="income">` elements. Always use `within(document.querySelector('.summary'))` first
 - `beforeEach` renders a fresh `<App>` — no shared state between tests
-- Seed data: 8 transactions; `[0]` = Salary (income, $5000), `[1]` = Rent (expense, $1200)
-  - Target `deleteButtons[1]` / `updateButtons[1]` when testing expense mutations
+- Seed data: 8 transactions; `[0]` = Salary (income, $5000), `[1]` = Rent (expense, $1200), `[2]` = Groceries (expense, $150)
+  - Target `deleteButtons[1]` / `updateButtons[1]` for expense mutations; `updateButtons[2]` for Groceries (category tests)
+- Inside the Update modal:
+  - `getByPlaceholderText('Description')` → description text input
+  - `getByRole('spinbutton')` → amount number input (unique; `type="number"`)
+  - `getAllByRole('combobox')` → `[typeSelect, categorySelect]`
 
 ## Constraints
 
 - No router, no React context, no external state library
-- No data persistence — state resets on page refresh by design
+- No server-side persistence — `localStorage` only; data is device-local
 - No backend; all logic is client-side

@@ -21,10 +21,10 @@ Expected output on a clean run:
 
 ```
  Test Files  1 passed (1)
-      Tests  19 passed (19)
+      Tests  23 passed (23)
 ```
 
-All 19 tests are in `src/App.test.jsx`. There is no separate test for individual components — the suite renders `<App>` end-to-end.
+All 23 tests are in `src/App.test.jsx`. There is no separate test for individual components — the suite renders `<App>` end-to-end.
 
 ## Build
 
@@ -36,11 +36,12 @@ npm run build     # production bundle → dist/
 
 | File | Role |
 |------|------|
-| `src/App.jsx` | Root — all shared state, derived values, handlers |
+| `src/App.jsx` | Root — all shared state, derived values, handlers, localStorage sync |
 | `src/components/Summary.jsx` | Summary cards (income, expenses, balance) |
 | `src/components/AddTransaction.jsx` | Add form with local state |
 | `src/components/Transactions.jsx` | Filters + transaction table |
-| `src/components/ModalActions.jsx` | Shared modal shell (Delete + Update) |
+| `src/components/UpdateTransaction.jsx` | Update modal — local form state for all 4 fields |
+| `src/components/ModalActions.jsx` | Shared modal shell (Delete flow; also composed inside UpdateTransaction) |
 | `src/App.css` | All styles — summary cards, table, modals, layout |
 | `vite.config.js` | Vite + Vitest config (jsdom environment) |
 
@@ -55,7 +56,8 @@ npm run build     # production bundle → dist/
 | `.filters` | Filter dropdowns row |
 | `.modal-overlay` | Modal backdrop |
 | `.modal` | Modal dialog |
-| `.modal-input` | Amount input inside Update modal |
+| `.update-fields` | Container for all 4 update inputs inside the Update modal |
+| `.modal-input` | Each field input/select inside `.update-fields` |
 | `.modal-confirm` | Confirm button (both modals) |
 | `.modal-cancel` | Cancel button (both modals) |
 | `.update-btn` | Per-row Update button |
@@ -63,7 +65,7 @@ npm run build     # production bundle → dist/
 
 ## Seed Data
 
-8 transactions loaded on mount; resets on page refresh by design.
+8 transactions loaded on mount from `localStorage` (key: `finance-tracker-transactions`); seed data used only when storage is empty. Changes persist across page refreshes.
 
 | # | Description | Type | Amount | Category |
 |---|-------------|------|--------|----------|

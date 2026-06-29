@@ -27,10 +27,10 @@ Exit code `0` and stdout contains:
 
 ```
  Test Files  1 passed (1)
-      Tests  19 passed (19)
+      Tests  23 passed (23)
 ```
 
-Report: **All 19 tests passed.**
+Report: **All 23 tests passed.**
 
 ## Failure Handling
 
@@ -62,5 +62,5 @@ Report each failure as a separate bullet. Do not run the tests a second time.
 | Summary Cards | 3 | Initial totals display |
 | Add Transaction | 5 | Add income/expense, validation, form reset |
 | Delete Transaction | 2 | Confirm and cancel delete modal |
-| Update Transaction | 4 | Confirm, cancel, empty amount, non-numeric |
+| Update Transaction | 8 | Confirm amount/description/type/category; cancel; empty amount; empty description; non-numeric amount |
 | Filter Transactions | 5 | Type filter, category filter, combined, reset |

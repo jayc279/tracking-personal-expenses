@@ -33,28 +33,30 @@ npm run build      # production build
 
 ### App structure
 
-`App.jsx` owns state and handlers; rendering is delegated to 4 components in `src/components/`:
+`App.jsx` owns state and handlers; rendering is delegated to 5 components in `src/components/`:
 
 | Component | File | Responsibility |
 |---|---|---|
 | `Summary` | `components/Summary.jsx` | 3 summary cards (income, expenses, balance) |
 | `AddTransaction` | `components/AddTransaction.jsx` | Add form — manages its own local form state; calls `onSubmit(newTransaction)` |
 | `Transactions` | `components/Transactions.jsx` | Filter dropdowns + transaction table with Update/Delete buttons |
-| `ModalActions` | `components/ModalActions.jsx` | Shared modal shell used by both Delete and Update flows |
+| `UpdateTransaction` | `components/UpdateTransaction.jsx` | Update modal — manages its own local form state for all 4 fields; calls `onConfirm(updatedTransaction)` |
+| `ModalActions` | `components/ModalActions.jsx` | Shared modal shell used by the Delete flow and composed inside `UpdateTransaction` |
 
 State in `App.jsx`:
-- `transactions` — 8 seed records; resets on page refresh by design
+- `transactions` — 8 seed records; persisted to `localStorage` under key `finance-tracker-transactions`; seeds only when storage is empty
 - `filterType`, `filterCategory` — passed to `Transactions`; filtering applied in `App`
-- `pendingDeleteId`, `pendingUpdate`, `updateAmount` — modal state
+- `pendingDeleteId`, `pendingUpdate` — modal visibility state (`null` = hidden)
+
+`UpdateTransaction` owns its own local form state (`description`, `amount`, `type`, `category`) synced from the transaction prop via `useEffect`. Validates description non-empty and amount numeric before calling `onConfirm`.
 
 Amounts are stored as strings and parsed with `parseFloat()` for arithmetic.
-
-The Update modal passes `<input className="modal-input">` as `children` to `ModalActions` — the modal shell is generic; the input slot is caller-owned.
 
 ### Testing
 
 - Runner: Vitest 4 + jsdom + `@testing-library/react` + `@testing-library/user-event` v14
-- Setup file: `src/setupTests.js` (imports `@testing-library/jest-dom`)
-- Test file: `src/App.test.jsx` — 19 tests covering Summary Cards, Add, Delete, Update, and Filter; all positive and negative cases
+- Setup file: `src/setupTests.js` — imports `@testing-library/jest-dom`; provides in-memory `localStorage` mock via `Object.defineProperty(globalThis, 'localStorage', ...)`; clears store in `beforeEach` so each test gets SEED_TRANSACTIONS
+- Test file: `src/App.test.jsx` — 23 tests covering Summary Cards, Add, Delete, Update (8 tests — all 4 editable fields), and Filter; all positive and negative cases
 - Use `userEvent.setup()` pattern (not the legacy `userEvent` directly)
 - Use `within(element)` to scope queries — "Income" appears in both summary headings and `<option>` elements
+- In the Update modal, use `getByPlaceholderText('Description')` for the text input and `getByRole('spinbutton')` for the amount input; `getAllByRole('combobox')` returns `[typeSelect, categorySelect]`
