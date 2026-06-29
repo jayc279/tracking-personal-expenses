@@ -33,15 +33,23 @@ npm run build      # production build
 
 ### App structure
 
-Single-component app (`App.jsx`) with:
-- In-memory transaction state (8 seed records; resets on page refresh by design)
-- Summary cards: total income, total expenses, balance (recalculated on every state change)
-- Add-transaction form with description, amount, type, category; auto-sets today's date
-- Update modal: edit amount in place with confirmation
-- Delete modal: remove row with confirmation
-- Filterable transaction table by type and category
+`App.jsx` owns state and handlers; rendering is delegated to 4 components in `src/components/`:
+
+| Component | File | Responsibility |
+|---|---|---|
+| `Summary` | `components/Summary.jsx` | 3 summary cards (income, expenses, balance) |
+| `AddTransaction` | `components/AddTransaction.jsx` | Add form — manages its own local form state; calls `onSubmit(newTransaction)` |
+| `Transactions` | `components/Transactions.jsx` | Filter dropdowns + transaction table with Update/Delete buttons |
+| `ModalActions` | `components/ModalActions.jsx` | Shared modal shell used by both Delete and Update flows |
+
+State in `App.jsx`:
+- `transactions` — 8 seed records; resets on page refresh by design
+- `filterType`, `filterCategory` — passed to `Transactions`; filtering applied in `App`
+- `pendingDeleteId`, `pendingUpdate`, `updateAmount` — modal state
 
 Amounts are stored as strings and parsed with `parseFloat()` for arithmetic.
+
+The Update modal passes `<input className="modal-input">` as `children` to `ModalActions` — the modal shell is generic; the input slot is caller-owned.
 
 ### Testing
 
