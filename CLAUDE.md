@@ -19,14 +19,34 @@ uv run <script>    # run a script in the venv
 
 ## Frontend (src/)
 
-The `src/` directory contains a React 18 finance tracker app (`App.jsx`, `main.jsx`). There is no `package.json` yet — the frontend build toolchain (e.g., Vite) has not been initialized.
+The `src/` directory contains a React 18 finance tracker app built with Vite 6.
+
+### Commands
+
+```bash
+npm install        # install dependencies
+npm run dev        # start dev server (Vite)
+npm test           # run test suite once (Vitest)
+npm run test:watch # run tests in watch mode
+npm run build      # production build
+```
 
 ### App structure
 
 Single-component app (`App.jsx`) with:
-- In-memory transaction state (income/expense records)
-- Summary cards (total income, expenses, balance)
-- Add-transaction form
+- In-memory transaction state (8 seed records; resets on page refresh by design)
+- Summary cards: total income, total expenses, balance (recalculated on every state change)
+- Add-transaction form with description, amount, type, category; auto-sets today's date
+- Update modal: edit amount in place with confirmation
+- Delete modal: remove row with confirmation
 - Filterable transaction table by type and category
 
-**Known bug:** `totalIncome` and `totalExpenses` reduce over string `amount` values instead of parsed floats — arithmetic will be wrong until amounts are stored as numbers.
+Amounts are stored as strings and parsed with `parseFloat()` for arithmetic.
+
+### Testing
+
+- Runner: Vitest 4 + jsdom + `@testing-library/react` + `@testing-library/user-event` v14
+- Setup file: `src/setupTests.js` (imports `@testing-library/jest-dom`)
+- Test file: `src/App.test.jsx` — 19 tests covering Summary Cards, Add, Delete, Update, and Filter; all positive and negative cases
+- Use `userEvent.setup()` pattern (not the legacy `userEvent` directly)
+- Use `within(element)` to scope queries — "Income" appears in both summary headings and `<option>` elements
