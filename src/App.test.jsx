@@ -1,10 +1,24 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { getTransactions, addTransaction, updateTransaction, deleteTransaction } from './api'
+
+vi.mock('./api')
 
 const SEED_INCOME = 5000
 const SEED_EXPENSES = 2370
 const SEED_BALANCE = SEED_INCOME - SEED_EXPENSES
+
+const SEED_TRANSACTIONS = [
+  { id: 1, description: "Salary",        amount: "5000", type: "income",  category: "salary",        date: "2025-01-01" },
+  { id: 2, description: "Rent",          amount: "1200", type: "expense", category: "housing",       date: "2025-01-02" },
+  { id: 3, description: "Groceries",     amount: "150",  type: "expense", category: "food",          date: "2025-01-03" },
+  { id: 4, description: "Freelance Work",amount: "800",  type: "expense", category: "salary",        date: "2025-01-05" },
+  { id: 5, description: "Electric Bill", amount: "95",   type: "expense", category: "utilities",     date: "2025-01-06" },
+  { id: 6, description: "Dinner Out",    amount: "65",   type: "expense", category: "food",          date: "2025-01-07" },
+  { id: 7, description: "Gas",           amount: "45",   type: "expense", category: "transport",     date: "2025-01-08" },
+  { id: 8, description: "Netflix",       amount: "15",   type: "expense", category: "entertainment", date: "2025-01-10" },
+]
 
 const getSummaryValue = (label) => {
   const summary = document.querySelector('.summary')
@@ -25,12 +39,17 @@ const getAddFormSelects = () => {
 
 const getRowCount = () => {
   const section = getTransactionsSection()
-  // subtract 1 for header row
   return within(section).getAllByRole('row').length - 1
 }
 
-beforeEach(() => {
-  render(<App />)
+beforeEach(async () => {
+  getTransactions.mockResolvedValue([...SEED_TRANSACTIONS])
+  addTransaction.mockImplementation(t => Promise.resolve({ ...t, id: Date.now() }))
+  updateTransaction.mockImplementation(t => Promise.resolve(t))
+  deleteTransaction.mockResolvedValue(undefined)
+
+  await act(async () => { render(<App />) })
+  await waitFor(() => expect(getRowCount()).toBe(8))
 })
 
 // ---------------------------------------------------------------------------
@@ -67,7 +86,7 @@ describe('Add Transaction', () => {
     await user.selectOptions(typeSelect, 'income')
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
-    expect(getRowCount()).toBe(9)
+    await waitFor(() => expect(getRowCount()).toBe(9))
     expect(getSummaryValue('Income')).toBe(`$${SEED_INCOME + 1000}`)
     expect(getSummaryValue('Balance')).toBe(`$${SEED_BALANCE + 1000}`)
   })
@@ -83,7 +102,7 @@ describe('Add Transaction', () => {
     await user.selectOptions(typeSelect, 'expense')
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
-    expect(getRowCount()).toBe(9)
+    await waitFor(() => expect(getRowCount()).toBe(9))
     expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES + 5}`)
     expect(getSummaryValue('Balance')).toBe(`$${SEED_BALANCE - 5}`)
   })
@@ -97,7 +116,7 @@ describe('Add Transaction', () => {
     await user.type(amtInput, '100')
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
-    expect(descInput).toHaveValue('')
+    await waitFor(() => expect(descInput).toHaveValue(''))
     expect(amtInput).toHaveValue(null)
   })
 
@@ -130,7 +149,6 @@ describe('Add Transaction', () => {
 describe('Delete Transaction', () => {
   test('confirm removes the row and updates totals', async () => {
     const user = userEvent.setup()
-    // Delete "Rent" ($1200 expense) — row index 1 (row 0 is Salary/income)
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(deleteButtons[1])
 
@@ -139,7 +157,7 @@ describe('Delete Transaction', () => {
 
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
-    expect(getRowCount()).toBe(7)
+    await waitFor(() => expect(getRowCount()).toBe(7))
     expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES - 1200}`)
     expect(getSummaryValue('Balance')).toBe(`$${SEED_BALANCE + 1200}`)
   })
@@ -164,7 +182,6 @@ describe('Delete Transaction', () => {
 describe('Update Transaction', () => {
   test('confirm updates amount and recalculates totals', async () => {
     const user = userEvent.setup()
-    // Update "Rent" from $1200 to $900 — row index 1 (row 0 is Salary/income)
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
     await user.click(updateButtons[1])
 
@@ -176,7 +193,7 @@ describe('Update Transaction', () => {
     await user.type(input, '900')
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
-    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.modal')).not.toBeInTheDocument())
     expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES - 1200 + 900}`)
     expect(getSummaryValue('Balance')).toBe(`$${SEED_BALANCE + 1200 - 900}`)
   })
@@ -184,7 +201,7 @@ describe('Update Transaction', () => {
   test('confirm updates description in the table', async () => {
     const user = userEvent.setup()
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
-    await user.click(updateButtons[1]) // Rent row
+    await user.click(updateButtons[1])
 
     const modal = document.querySelector('.modal')
     const descInput = within(modal).getByPlaceholderText('Description')
@@ -192,7 +209,7 @@ describe('Update Transaction', () => {
     await user.type(descInput, 'Mortgage')
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
-    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.modal')).not.toBeInTheDocument())
     const section = getTransactionsSection()
     expect(within(section).getByText('Mortgage')).toBeInTheDocument()
     expect(within(section).queryByText('Rent')).not.toBeInTheDocument()
@@ -200,7 +217,6 @@ describe('Update Transaction', () => {
 
   test('confirm updates type and recalculates summary', async () => {
     const user = userEvent.setup()
-    // Flip Salary (income, $5000) to expense — row index 0
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
     await user.click(updateButtons[0])
 
@@ -209,26 +225,24 @@ describe('Update Transaction', () => {
     await user.selectOptions(typeSelect, 'expense')
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
-    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.modal')).not.toBeInTheDocument())
     expect(getSummaryValue('Income')).toBe('$0')
     expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES + SEED_INCOME}`)
   })
 
   test('confirm updates category shown in table', async () => {
     const user = userEvent.setup()
-    // Update Groceries (food) category to transport
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
-    await user.click(updateButtons[2]) // Groceries row
+    await user.click(updateButtons[2])
 
     const modal = document.querySelector('.modal')
     const categorySelect = within(modal).getAllByRole('combobox')[1]
     await user.selectOptions(categorySelect, 'transport')
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
-    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.modal')).not.toBeInTheDocument())
     const section = getTransactionsSection()
     const rows = within(section).getAllByRole('row')
-    // row 0 = header; row 3 = Groceries (index 2 data)
     expect(rows[3].textContent).toContain('transport')
   })
 
@@ -282,7 +296,6 @@ describe('Update Transaction', () => {
     const modal = document.querySelector('.modal')
     const input = within(modal).getByRole('spinbutton')
     await user.clear(input)
-    // type="number" rejects letters; clearing simulates the guard condition
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
     expect(document.querySelector('.modal')).toBeInTheDocument()
@@ -311,7 +324,7 @@ describe('Filter Transactions', () => {
     const user = userEvent.setup()
     const [, filterCategorySelect] = getFilterSelects()
     await user.selectOptions(filterCategorySelect, 'food')
-    expect(getRowCount()).toBe(2) // Groceries + Dinner Out
+    expect(getRowCount()).toBe(2)
   })
 
   test('filter by income + food yields empty table', async () => {
