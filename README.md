@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Finance Tracker is a lightweight, single-page React application for recording and reviewing personal income and expense transactions. It provides real-time balance calculation, full in-line editing of all transaction fields, category-based filtering, and localStorage persistence — with no backend dependency. The UI is built from five focused components (`Summary`, `AddTransaction`, `Transactions`, `UpdateTransaction`, `ModalActions`) composed in a top-level `App` that owns all shared state.
+Finance Tracker is a full-stack web application for recording and reviewing personal income and expense transactions. A React 18 SPA handles all UI and state; a FastAPI Python backend persists data in SQLite and serves a REST API; Jinja2 renders the HTML shell in production. The UI is built from five focused components (`Summary`, `AddTransaction`, `Transactions`, `UpdateTransaction`, `ModalActions`) composed in a top-level `App` that communicates with the backend through a thin `api.js` fetch layer.
 
 ---
 
@@ -48,7 +48,7 @@ No prior financial software experience is assumed. The UI must be self-explanato
 
 | Metric | Target |
 |--------|--------|
-| CRUD operation latency | < 200 ms per action (client-side only, no network) |
+| CRUD operation latency | < 200 ms per action (localhost API round-trip + React state update) |
 | Balance accuracy | Balance always equals Σ income − Σ expenses; verified on every state change |
 | Automated test coverage | 100 % of defined test cases pass (`npm test` exits 0) |
 | Validation coverage | Every invalid input scenario has a corresponding negative test |
@@ -60,13 +60,14 @@ No prior financial software experience is assumed. The UI must be self-explanato
 *(PRD)*
 
 ### Goals
-- Single-page application with no backend or build-time data fetching
-- Transaction data persisted to `localStorage`; survives page refresh; seeds from 8 hardcoded records only when storage is empty
+- React 18 SPA frontend communicating with a FastAPI backend via REST API
+- Transaction data persisted in SQLite (`finance.db`); seeded with 8 hardcoded records on first server start
+- Jinja2 renders the HTML entry point in production; Vite serves it in development
 - Responsive layout readable on mobile viewports
 - Confirmation modals for destructive and mutating actions
 
 ### Non-Goals
-- Server-side or cloud data persistence
+- Cloud or remote database persistence (SQLite is local to the server process)
 - User authentication or multi-user support
 - CSV / JSON import or export
 - Charts, graphs, or time-series views
@@ -88,7 +89,7 @@ No prior financial software experience is assumed. The UI must be self-explanato
 | FR-5 | **Filter by Type** — dropdown with options All Types / Income / Expense; filters the transaction table without affecting summary totals | Only matching rows are visible |
 | FR-6 | **Filter by Category** — dropdown with All Categories plus the seven named categories; can be combined with the type filter | Only rows matching both active filters are visible |
 | FR-7 | **Input Validation** — Add is blocked when description is empty or amount is empty; Update Confirm is blocked when description is empty, amount is empty, or amount is non-numeric | No new row added; modal stays open on invalid confirm |
-| FR-8 | **Data Persistence** — transactions are saved to `localStorage` on every state change and restored on page load; seed data is used only when storage is empty | Data survives page refresh; adds/edits/deletes persist across sessions |
+| FR-8 | **Data Persistence** — transactions are stored in SQLite via the FastAPI backend; `GET /api/transactions` is called on page load; each CRUD action calls the corresponding REST endpoint and updates React state on success; 8 seed records are inserted on first server start | Data survives page refresh and server restart; adds/edits/deletes persist across sessions |
 
 ---
 
@@ -100,7 +101,7 @@ No prior financial software experience is assumed. The UI must be self-explanato
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `id` | `number` | `Date.now()` at creation; seed data uses integers 1–8 |
+| `id` | `number` | `INTEGER PRIMARY KEY AUTOINCREMENT` assigned by SQLite; seed records receive ids 1–8 |
 | `description` | `string` | Free text; required |
 | `amount` | `string` | Stored as string; parsed with `parseFloat()` for arithmetic |
 | `type` | `"income" \| "expense"` | Determines sign in balance calculation |
@@ -126,10 +127,20 @@ balance       = totalIncome − totalExpenses
 *(PRD)*
 
 ```
-index.html              Vite entry point; mounts React root at #root
+backend/
+  main.py               FastAPI app — lifespan init_db, Jinja2 GET /, /static mount
+  database.py           sqlite3 CRUD — init_db (+ seed), get_all, create, update, delete
+  models.py             Pydantic models: TransactionIn, TransactionOut
+  routers/
+    transactions.py     /api/transactions — GET, POST, PUT/{id}, DELETE/{id}
+  templates/
+    index.html          Jinja2 HTML shell — mounts React #root (production)
+finance.db              SQLite database — created on first server start
+index.html              Vite entry point (development); mounts React root at #root
 src/
   main.jsx              React 18 createRoot mount
-  App.jsx               Root component — shared state, derived values, handlers, localStorage sync
+  api.js                Fetch wrappers — sole reference to /api/transactions
+  App.jsx               Root component — shared state, async handlers, derived values
   App.css               Global styles (summary cards, table, modals, layout)
   index.css             CSS resets
   components/
@@ -138,10 +149,11 @@ src/
     Transactions.jsx    Filter dropdowns + transaction table with Update/Delete buttons
     UpdateTransaction.jsx  Update modal — local form state for all 4 fields; calls onConfirm(updated)
     ModalActions.jsx    Shared modal shell (Delete flow); children slot for arbitrary modal content
-  setupTests.js         jest-dom matchers + in-memory localStorage mock + beforeEach clear
-  App.test.jsx          Full test suite (23 tests)
-vite.config.js          Vite + Vitest configuration (jsdom environment)
-package.json            Dependencies and npm scripts
+  setupTests.js         jest-dom matchers only; no localStorage mock
+  App.test.jsx          Full test suite (23 tests); API mocked via vi.mock('./api')
+vite.config.js          Vite + Vitest config — jsdom env + /api proxy to :8000
+package.json            JS dependencies and npm scripts
+pyproject.toml          Python dependencies (fastapi, uvicorn, jinja2, mcp, dotenv)
 ```
 
 ### Component Hierarchy
@@ -168,8 +180,8 @@ App
 
 | State variable | Purpose |
 |----------------|---------|
-| `transactions` | Array of all Transaction objects; initialised from `localStorage` (falls back to SEED_TRANSACTIONS); synced to `localStorage` via `useEffect` on every change |
-| `filterType`, `filterCategory` | Active filter selections (applied in `App`, passed to `Transactions`) |
+| `transactions` | Array of all Transaction objects; loaded from `GET /api/transactions` on mount via `useEffect`; updated optimistically after each CRUD API call |
+| `filterType`, `filterCategory` | Active filter selections (applied client-side in `App`, passed to `Transactions`) |
 | `pendingDeleteId` | Controls delete modal visibility (`null` = hidden) |
 | `pendingUpdate` | Controls update modal visibility — holds the full transaction object being edited (`null` = hidden) |
 
@@ -185,7 +197,7 @@ App
 |----------------|---------|
 | `description`, `amount`, `type`, `category` | Synced from `transaction` prop via `useEffect`; validated on Confirm; passed back as merged object via `onConfirm(updated)` |
 
-**No router, no context, no external state library.** All derived values (`totalIncome`, `totalExpenses`, `balance`, `filteredTransactions`) are recalculated inline on every render in `App.jsx`.
+**No router, no React context, no external state library.** All derived values (`totalIncome`, `totalExpenses`, `balance`, `filteredTransactions`) are recalculated inline on every render in `App.jsx`. All API calls are isolated in `src/api.js` — components never call `fetch` directly.
 
 ---
 
@@ -195,11 +207,11 @@ App
 
 | Category | Requirement |
 |----------|-------------|
-| Performance | All state updates synchronous; no async operations; UI responds instantly |
+| Performance | CRUD handlers are `async`; UI state updates immediately on API response; localhost round-trip adds negligible latency |
 | Compatibility | Modern evergreen browsers (Chrome, Firefox, Edge, Safari) |
 | Accessibility | Native HTML form elements and buttons; semantic heading hierarchy |
-| Maintainability | Five focused components with clear prop contracts; `App.jsx` owns only shared state and handlers; `UpdateTransaction` owns its own form state; no build-time configuration beyond Vite defaults |
-| Test isolation | Each test renders a fresh `<App>`; `localStorage` mock cleared in `beforeEach` so every test starts from SEED_TRANSACTIONS |
+| Maintainability | Five focused React components with clear prop contracts; `src/api.js` isolates all fetch logic; `backend/database.py` isolates all SQL; no ORM dependency |
+| Test isolation | Each test renders a fresh `<App>`; `vi.mock('./api')` intercepts all fetch calls; `getTransactions` resolves to `SEED_TRANSACTIONS` in every `beforeEach` |
 
 ---
 
@@ -208,9 +220,11 @@ App
 *(V&V)*
 
 - **Runner**: Vitest 4 with jsdom environment
-- **Rendering**: `@testing-library/react` — `render`, `screen`, `within`
+- **Rendering**: `@testing-library/react` — `render`, `screen`, `within`, `act`, `waitFor`
 - **Interaction**: `@testing-library/user-event` v14 — `userEvent.setup()` pattern
 - **Custom matchers**: `@testing-library/jest-dom` (`toBeInTheDocument`, `toHaveValue`)
+- **API mock**: `vi.mock('./api')` at the top of the test file; `beforeEach` configures `mockResolvedValue` / `mockImplementation` for all four exported functions — no running backend required
+- **Async rendering**: `render(<App />)` is wrapped in `act(async () => {...})` then `waitFor(() => expect(getRowCount()).toBe(8))` to settle the initial `GET /api/transactions` before assertions run
 - **Selector scoping**: `within(element)` used throughout to avoid cross-section ambiguity (e.g. "Income" appears in both a summary heading and `<option>` elements)
 - **Test file**: `src/App.test.jsx`
 - **Setup file**: `src/setupTests.js`
@@ -263,19 +277,46 @@ No requirement is considered complete if any associated test case fails, even if
 
 ---
 
-## 14. Running Tests
+## 14. Running the Application
 
 *(V&V)*
 
+### Install dependencies
+
 ```bash
-# Install dependencies (first time only)
-npm install
+npm install      # JS dependencies
+uv sync          # Python dependencies
+```
 
-# Run all tests once
-npm test
+### Development (two servers)
 
-# Run in watch mode (re-runs on file save)
-npm run test:watch
+```bash
+# Terminal 1 — Backend
+uv run uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — Frontend
+npm run dev
+```
+
+- Frontend: **http://localhost:5173** (Vite, hot-reload)
+- API: **http://localhost:8000/api/transactions** (uvicorn, auto-reload)
+- Vite proxies all `/api/*` requests to `:8000` — no CORS configuration needed
+- `finance.db` is created and seeded on first backend start
+
+### Production
+
+```bash
+npm run build                                   # output → dist/
+uv run uvicorn backend.main:app --port 8000     # serves dist/ under /static/; Jinja2 serves /
+```
+
+### Running Tests
+
+Tests mock the API layer — no backend required.
+
+```bash
+npm test           # run all tests once
+npm run test:watch # re-run on file save
 ```
 
 Expected output:
