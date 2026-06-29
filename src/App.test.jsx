@@ -181,6 +181,57 @@ describe('Update Transaction', () => {
     expect(getSummaryValue('Balance')).toBe(`$${SEED_BALANCE + 1200 - 900}`)
   })
 
+  test('confirm updates description in the table', async () => {
+    const user = userEvent.setup()
+    const updateButtons = screen.getAllByRole('button', { name: 'Update' })
+    await user.click(updateButtons[1]) // Rent row
+
+    const modal = document.querySelector('.modal')
+    const descInput = within(modal).getByPlaceholderText('Description')
+    await user.clear(descInput)
+    await user.type(descInput, 'Mortgage')
+    await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
+
+    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    const section = getTransactionsSection()
+    expect(within(section).getByText('Mortgage')).toBeInTheDocument()
+    expect(within(section).queryByText('Rent')).not.toBeInTheDocument()
+  })
+
+  test('confirm updates type and recalculates summary', async () => {
+    const user = userEvent.setup()
+    // Flip Salary (income, $5000) to expense — row index 0
+    const updateButtons = screen.getAllByRole('button', { name: 'Update' })
+    await user.click(updateButtons[0])
+
+    const modal = document.querySelector('.modal')
+    const typeSelect = within(modal).getAllByRole('combobox')[0]
+    await user.selectOptions(typeSelect, 'expense')
+    await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
+
+    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    expect(getSummaryValue('Income')).toBe('$0')
+    expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES + SEED_INCOME}`)
+  })
+
+  test('confirm updates category shown in table', async () => {
+    const user = userEvent.setup()
+    // Update Groceries (food) category to transport
+    const updateButtons = screen.getAllByRole('button', { name: 'Update' })
+    await user.click(updateButtons[2]) // Groceries row
+
+    const modal = document.querySelector('.modal')
+    const categorySelect = within(modal).getAllByRole('combobox')[1]
+    await user.selectOptions(categorySelect, 'transport')
+    await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
+
+    expect(document.querySelector('.modal')).not.toBeInTheDocument()
+    const section = getTransactionsSection()
+    const rows = within(section).getAllByRole('row')
+    // row 0 = header; row 3 = Groceries (index 2 data)
+    expect(rows[3].textContent).toContain('transport')
+  })
+
   test('cancel leaves amount unchanged', async () => {
     const user = userEvent.setup()
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
@@ -210,6 +261,19 @@ describe('Update Transaction', () => {
     expect(getSummaryValue('Expenses')).toBe(`$${SEED_EXPENSES}`)
   })
 
+  test('empty description does not close modal', async () => {
+    const user = userEvent.setup()
+    const updateButtons = screen.getAllByRole('button', { name: 'Update' })
+    await user.click(updateButtons[0])
+
+    const modal = document.querySelector('.modal')
+    const descInput = within(modal).getByPlaceholderText('Description')
+    await user.clear(descInput)
+    await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
+
+    expect(document.querySelector('.modal')).toBeInTheDocument()
+  })
+
   test('non-numeric amount does not close modal', async () => {
     const user = userEvent.setup()
     const updateButtons = screen.getAllByRole('button', { name: 'Update' })
@@ -218,8 +282,7 @@ describe('Update Transaction', () => {
     const modal = document.querySelector('.modal')
     const input = within(modal).getByRole('spinbutton')
     await user.clear(input)
-    // type number input won't accept letters, but we can simulate by directly
-    // testing the guard: clear the field (results in empty string) and confirm
+    // type="number" rejects letters; clearing simulates the guard condition
     await user.click(within(modal).getByRole('button', { name: 'Confirm' }))
 
     expect(document.querySelector('.modal')).toBeInTheDocument()

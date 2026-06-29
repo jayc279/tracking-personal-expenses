@@ -4,6 +4,7 @@ import Summary from './components/Summary'
 import AddTransaction from './components/AddTransaction'
 import Transactions from './components/Transactions'
 import ModalActions from './components/ModalActions'
+import UpdateTransaction from './components/UpdateTransaction'
 
 const CATEGORIES = ["food", "housing", "utilities", "transport", "entertainment", "salary", "other"]
 
@@ -33,7 +34,6 @@ function App() {
   const [filterCategory, setFilterCategory] = useState("all")
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
   const [pendingUpdate, setPendingUpdate] = useState(null)
-  const [updateAmount, setUpdateAmount] = useState("")
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(transactions))
@@ -56,16 +56,8 @@ function App() {
     setPendingDeleteId(null)
   }
 
-  const openUpdate = (t) => {
-    setPendingUpdate(t)
-    setUpdateAmount(t.amount)
-  }
-
-  const handleUpdateConfirm = () => {
-    if (!updateAmount || isNaN(parseFloat(updateAmount))) return
-    setTransactions(transactions.map(t =>
-      t.id === pendingUpdate.id ? { ...t, amount: updateAmount } : t
-    ))
+  const handleUpdateConfirm = (updated) => {
+    setTransactions(transactions.map(t => t.id === updated.id ? updated : t))
     setPendingUpdate(null)
   }
 
@@ -86,26 +78,16 @@ function App() {
           categories={CATEGORIES}
           onFilterTypeChange={setFilterType}
           onFilterCategoryChange={setFilterCategory}
-          onUpdate={openUpdate}
+          onUpdate={setPendingUpdate}
           onDelete={setPendingDeleteId}
         />
       </div>
-      <ModalActions
-        visible={pendingUpdate !== null}
-        message={pendingUpdate
-          ? <><strong>{pendingUpdate.description}</strong> — update amount</>
-          : null}
+      <UpdateTransaction
+        transaction={pendingUpdate}
+        categories={CATEGORIES}
         onConfirm={handleUpdateConfirm}
         onCancel={() => setPendingUpdate(null)}
-      >
-        <input
-          className="modal-input"
-          type="number"
-          value={updateAmount}
-          onChange={(e) => setUpdateAmount(e.target.value)}
-          autoFocus
-        />
-      </ModalActions>
+      />
       <ModalActions
         visible={pendingDeleteId !== null}
         message="Delete this transaction?"
