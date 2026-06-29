@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Finance Tracker is a lightweight, single-page React application for recording and reviewing personal income and expense transactions. It provides real-time balance calculation, in-line editing, and category-based filtering with no backend or database dependency.
+Finance Tracker is a lightweight, single-page React application for recording and reviewing personal income and expense transactions. It provides real-time balance calculation, in-line editing, and category-based filtering with no backend or database dependency. The UI is built from four focused components (`Summary`, `AddTransaction`, `Transactions`, `ModalActions`) composed in a top-level `App` that owns all shared state.
 
 ---
 
@@ -125,29 +125,54 @@ balance       = totalIncome − totalExpenses
 *(PRD)*
 
 ```
-index.html          Vite entry point; mounts React root at #root
+index.html              Vite entry point; mounts React root at #root
 src/
-  main.jsx          React 18 createRoot mount
-  App.jsx           Single component — all state, logic, and JSX
-  App.css           Component-scoped styles (summary cards, table, modals)
-  index.css         Global resets
-  setupTests.js     Extends expect with @testing-library/jest-dom matchers
-  App.test.jsx      Full test suite (19 tests)
-vite.config.js      Vite + Vitest configuration (jsdom environment)
-package.json        Dependencies and npm scripts
+  main.jsx              React 18 createRoot mount
+  App.jsx               Root component — shared state, derived values, handlers
+  App.css               Global styles (summary cards, table, modals, layout)
+  index.css             CSS resets
+  components/
+    Summary.jsx         Presentational — 3 summary cards; no state, no callbacks
+    AddTransaction.jsx  Add form — owns its own local form state; calls onSubmit(newTransaction)
+    Transactions.jsx    Filter dropdowns + transaction table with Update/Delete buttons
+    ModalActions.jsx    Shared modal shell (Delete and Update); children slot for modal-input
+  setupTests.js         Extends expect with @testing-library/jest-dom matchers
+  App.test.jsx          Full test suite (19 tests)
+vite.config.js          Vite + Vitest configuration (jsdom environment)
+package.json            Dependencies and npm scripts
 ```
 
-**State (all `useState` in `App.jsx`):**
+### Component Hierarchy
+
+```
+App
+├── Summary               (totalIncome, totalExpenses, balance)
+├── AddTransaction        (categories, onSubmit)
+├── Transactions          (transactions, filterType, filterCategory, categories,
+│                          onFilterTypeChange, onFilterCategoryChange, onUpdate, onDelete)
+├── ModalActions          (visible, message, onConfirm, onCancel)   ← Update modal
+│   └── <input>           modal-input passed as children by App
+└── ModalActions          (visible, message, onConfirm, onCancel)   ← Delete modal
+```
+
+### State Ownership
+
+**`App.jsx` (shared / cross-component state):**
 
 | State variable | Purpose |
 |----------------|---------|
 | `transactions` | Array of all Transaction objects |
-| `description`, `amount`, `type`, `category` | Add-form field values |
-| `filterType`, `filterCategory` | Active filter selections |
+| `filterType`, `filterCategory` | Active filter selections (applied in `App`, passed to `Transactions`) |
 | `pendingDeleteId` | Controls delete modal visibility (`null` = hidden) |
-| `pendingUpdate`, `updateAmount` | Controls update modal visibility and pre-fill |
+| `pendingUpdate`, `updateAmount` | Controls update modal visibility and amount pre-fill |
 
-**No router, no context, no external state library.** All derived values (totals, filtered list) are recalculated inline on every render.
+**`AddTransaction.jsx` (local form state):**
+
+| State variable | Purpose |
+|----------------|---------|
+| `description`, `amount`, `type`, `category` | Controlled inputs; reset to defaults after submit |
+
+**No router, no context, no external state library.** All derived values (`totalIncome`, `totalExpenses`, `balance`, `filteredTransactions`) are recalculated inline on every render in `App.jsx`.
 
 ---
 
@@ -160,7 +185,7 @@ package.json        Dependencies and npm scripts
 | Performance | All state updates synchronous; no async operations; UI responds instantly |
 | Compatibility | Modern evergreen browsers (Chrome, Firefox, Edge, Safari) |
 | Accessibility | Native HTML form elements and buttons; semantic heading hierarchy |
-| Maintainability | Single component; logic colocated with markup; no build-time configuration beyond Vite defaults |
+| Maintainability | Four focused components with clear prop contracts; `App.jsx` owns only state and handlers; no build-time configuration beyond Vite defaults |
 | Test isolation | Each test renders a fresh component instance (`beforeEach` render); no shared state between tests |
 
 ---
