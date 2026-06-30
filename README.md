@@ -1,4 +1,4 @@
-# Finance Tracker
+# Personal Expenses Tracker
 
 ## 1. Executive Summary
 
