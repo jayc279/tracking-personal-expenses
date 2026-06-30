@@ -325,3 +325,9 @@ Expected output:
  Test Files  1 passed (1)
       Tests  23 passed (23)
 ```
+
+## References & Attributions
+* **Original Application**: Based on the [Claude Code Course](https://codewithmosh.com/p/claude-code) by **Mosh Hamedani**.
+* This project is a refactored fork of the sample test application found at [Expense Tracker Starter Kit](https://github.com/mosh-hamedani/expense-tracker-starter).
+* **Changes Made**: Fixed core routing bugs, added features, added SQL, refactored to Python, and migrated the codebase to FastAPI, React, and Jinja2 from Next.js.
+
